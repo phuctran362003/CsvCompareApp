@@ -1,3 +1,4 @@
+using System.Text;
 using CsvCompareApp.Models;
 
 namespace CsvCompareApp.Services
@@ -13,27 +14,50 @@ namespace CsvCompareApp.Services
 
         public string GetFilePath()
         {
-            Console.WriteLine("=== CSV COMPARISON TOOL ===\n");
+            Console.WriteLine("=== CÔNG CỤ SO SÁNH CSV ===");
+            Console.WriteLine("📝 Hỗ trợ UTF-8, Windows-1258 và các encoding Tiếng Việt\n");
             
-            while (true)
+            int attempts = 0;
+            const int maxAttempts = 5;
+            
+            while (attempts < maxAttempts)
             {
-                Console.Write("Nhập đường dẫn đến file CSV: ");
+                Console.Write("Nhập đường dẫn đến file CSV (hoặc 'exit' để thoát): ");
                 string? filePath = Console.ReadLine();
                 
                 if (string.IsNullOrEmpty(filePath))
                 {
-                    Console.WriteLine("Vui lòng nhập đường dẫn file!");
+                    attempts++;
+                    Console.WriteLine("Input trống! Vui lòng nhập đường dẫn file.");
                     continue;
+                }
+                
+                filePath = filePath.Trim();
+                
+                if (filePath.Equals("exit", StringComparison.OrdinalIgnoreCase))
+                {
+                    Console.WriteLine("Thoát chương trình...");
+                    Environment.Exit(0);
+                }
+                
+                // Loại bỏ dấu ngoặc kép nếu có
+                if ((filePath.StartsWith("\"") && filePath.EndsWith("\"")) ||
+                    (filePath.StartsWith("'") && filePath.EndsWith("'")))
+                {
+                    filePath = filePath[1..^1];
                 }
                 
                 if (!File.Exists(filePath))
                 {
-                    Console.WriteLine("File không tồn tại! Vui lòng kiểm tra lại đường dẫn.");
+                    attempts++;
+                    Console.WriteLine($"File không tồn tại: '{filePath}'. Vui lòng kiểm tra lại đường dẫn.");
                     continue;
                 }
                 
                 return filePath;
             }
+            
+            throw new Exception($"Quá nhiều lần nhập sai đường dẫn file ({maxAttempts} lần). Chương trình sẽ thoát.");
         }
 
         public ComparisonType GetComparisonType()
@@ -42,43 +66,87 @@ namespace CsvCompareApp.Services
             Console.WriteLine("1. So sánh hai cột đơn (A vs B)");
             Console.WriteLine("2. So sánh nhóm cột (ID + Amount)");
             
-            while (true)
+            int attempts = 0;
+            const int maxAttempts = 5;
+            
+            while (attempts < maxAttempts)
             {
                 Console.Write("Nhập lựa chọn (1 hoặc 2): ");
                 string? input = Console.ReadLine();
                 
-                if (input == "1")
+                if (string.IsNullOrEmpty(input))
+                {
+                    attempts++;
+                    Console.WriteLine("Input trống! Vui lòng nhập 1 hoặc 2.");
+                    continue;
+                }
+                
+                if (input.Trim() == "1")
                     return ComparisonType.TwoColumns;
-                else if (input == "2")
+                else if (input.Trim() == "2")
                     return ComparisonType.GroupColumns;
                 else
-                    Console.WriteLine("Vui lòng nhập 1 hoặc 2!");
+                {
+                    attempts++;
+                    Console.WriteLine($"Input không hợp lệ: '{input}'. Vui lòng nhập 1 hoặc 2!");
+                }
             }
+            
+            Console.WriteLine($"Quá nhiều lần nhập sai ({maxAttempts} lần). Sử dụng mặc định: So sánh hai cột đơn.");
+            return ComparisonType.TwoColumns;
         }
 
-        public bool GetHasHeaderOption()
+        public Encoding? SelectEncoding()
         {
-            Console.WriteLine("\nFile CSV có header (dòng tiêu đề) không?");
-            Console.WriteLine("1. Có header");
-            Console.WriteLine("2. Không có header");
+            Console.WriteLine("\n🔧 Auto-detect encoding không thành công.");
+            Console.WriteLine("Vui lòng chọn encoding thủ công:");
+            Console.WriteLine("1. UTF-8");
+            Console.WriteLine("2. UTF-8 with BOM");
+            Console.WriteLine("3. Windows-1258 (Vietnamese)");
+            Console.WriteLine("4. ASCII");
+            Console.WriteLine("5. Windows-1252 (Western European)");
+            Console.WriteLine("6. Bỏ qua (sử dụng UTF-8)");
             
-            while (true)
+            int attempts = 0;
+            const int maxAttempts = 3;
+            
+            while (attempts < maxAttempts)
             {
-                Console.Write("Nhập lựa chọn (1 hoặc 2): ");
+                Console.Write("Nhập lựa chọn (1-6): ");
                 string? input = Console.ReadLine();
                 
-                if (input == "1")
-                    return true;
-                else if (input == "2")
-                    return false;
-                else
-                    Console.WriteLine("Vui lòng nhập 1 hoặc 2!");
+                if (string.IsNullOrEmpty(input))
+                {
+                    attempts++;
+                    continue;
+                }
+                
+                switch (input.Trim())
+                {
+                    case "1": return Encoding.UTF8;
+                    case "2": return new UTF8Encoding(true); // UTF-8 with BOM
+                    case "3": return Encoding.GetEncoding(1258); // Windows-1258
+                    case "4": return Encoding.ASCII;
+                    case "5": return Encoding.GetEncoding(1252); // Windows-1252
+                    case "6": return null; // Skip manual selection
+                    default:
+                        attempts++;
+                        Console.WriteLine("Lựa chọn không hợp lệ!");
+                        break;
+                }
             }
+            
+            return null; // Use default
         }
 
-        public (string, string) SelectTwoColumns(List<string> availableColumns, bool hasHeader)
+        public (bool hasHeader, List<string> columns) AnalyzeCsvFile(string filePath)
         {
-            if (hasHeader && availableColumns.Any())
+            return _csvReaderService.AnalyzeCsvFile(filePath);
+        }
+
+        public (string, string) SelectTwoColumns(List<string> availableColumns)
+        {
+            if (availableColumns.Any())
             {
                 Console.WriteLine("\nCác cột có sẵn:");
                 for (int i = 0; i < availableColumns.Count; i++)
@@ -93,31 +161,31 @@ namespace CsvCompareApp.Services
             }
             else
             {
-                Console.Write("Nhập tên cột thứ nhất (hoặc A, B, C...): ");
+                Console.Write("Nhập tên cột thứ nhất: ");
                 string? col1 = Console.ReadLine();
-                Console.Write("Nhập tên cột thứ hai (hoặc A, B, C...): ");
+                Console.Write("Nhập tên cột thứ hai: ");
                 string? col2 = Console.ReadLine();
                 
-                return (col1 ?? "A", col2 ?? "B");
+                return (col1 ?? "Column_1", col2 ?? "Column_2");
             }
         }
 
-        public (GroupColumnConfiguration, GroupColumnConfiguration) SelectGroupColumns(List<string> availableColumns, bool hasHeader)
+        public (GroupColumnConfiguration, GroupColumnConfiguration) SelectGroupColumns(List<string> availableColumns)
         {
             Console.WriteLine("\n=== CẤU HÌNH NHÓM 1 ===");
-            var group1 = ConfigureGroup(availableColumns, hasHeader, "Nhóm 1");
+            var group1 = ConfigureGroup(availableColumns, "Nhóm 1");
             
             Console.WriteLine("\n=== CẤU HÌNH NHÓM 2 ===");
-            var group2 = ConfigureGroup(availableColumns, hasHeader, "Nhóm 2");
+            var group2 = ConfigureGroup(availableColumns, "Nhóm 2");
             
             return (group1, group2);
         }
 
-        private GroupColumnConfiguration ConfigureGroup(List<string> availableColumns, bool hasHeader, string groupName)
+        private GroupColumnConfiguration ConfigureGroup(List<string> availableColumns, string groupName)
         {
             var config = new GroupColumnConfiguration { GroupName = groupName };
             
-            if (hasHeader && availableColumns.Any())
+            if (availableColumns.Any())
             {
                 Console.WriteLine("Các cột có sẵn:");
                 for (int i = 0; i < availableColumns.Count; i++)
@@ -142,16 +210,22 @@ namespace CsvCompareApp.Services
 
         private string SelectColumn(List<string> availableColumns, string prompt)
         {
-            while (true)
+            int attempts = 0;
+            const int maxAttempts = 5;
+            
+            while (attempts < maxAttempts)
             {
                 Console.Write($"{prompt} (số thứ tự hoặc tên cột): ");
                 string? input = Console.ReadLine();
                 
                 if (string.IsNullOrEmpty(input))
                 {
-                    Console.WriteLine("Vui lòng nhập lựa chọn!");
+                    attempts++;
+                    Console.WriteLine("Input trống! Vui lòng nhập lựa chọn.");
                     continue;
                 }
+                
+                input = input.Trim();
                 
                 // Thử parse số
                 if (int.TryParse(input, out int index) && index >= 1 && index <= availableColumns.Count)
@@ -168,8 +242,12 @@ namespace CsvCompareApp.Services
                     return matchingColumn;
                 }
                 
-                Console.WriteLine("Lựa chọn không hợp lệ! Vui lòng thử lại.");
+                attempts++;
+                Console.WriteLine($"Lựa chọn không hợp lệ: '{input}'. Vui lòng nhập số từ 1-{availableColumns.Count} hoặc tên cột.");
             }
+            
+            Console.WriteLine($"Quá nhiều lần nhập sai ({maxAttempts} lần). Sử dụng cột đầu tiên: {availableColumns[0]}");
+            return availableColumns[0];
         }
 
         public bool AskToContinue()
@@ -178,18 +256,34 @@ namespace CsvCompareApp.Services
             Console.WriteLine("1. Có");
             Console.WriteLine("2. Không");
             
-            while (true)
+            int attempts = 0;
+            const int maxAttempts = 3;
+            
+            while (attempts < maxAttempts)
             {
                 Console.Write("Nhập lựa chọn (1 hoặc 2): ");
                 string? input = Console.ReadLine();
                 
-                if (input == "1")
+                if (string.IsNullOrEmpty(input))
+                {
+                    attempts++;
+                    Console.WriteLine("Input trống! Vui lòng nhập 1 hoặc 2.");
+                    continue;
+                }
+                
+                if (input.Trim() == "1")
                     return true;
-                else if (input == "2")
+                else if (input.Trim() == "2")
                     return false;
                 else
-                    Console.WriteLine("Vui lòng nhập 1 hoặc 2!");
+                {
+                    attempts++;
+                    Console.WriteLine($"Input không hợp lệ: '{input}'. Vui lòng nhập 1 hoặc 2!");
+                }
             }
+            
+            Console.WriteLine($"Quá nhiều lần nhập sai ({maxAttempts} lần). Thoát chương trình.");
+            return false;
         }
     }
 }

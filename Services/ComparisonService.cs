@@ -8,10 +8,10 @@ namespace CsvCompareApp.Services
         {
             var result = new ComparisonResult();
             
-            Console.WriteLine($"=== SO SÁNH HAI CỘT: {columnA} vs {columnB} ===\n");
+            Console.WriteLine($"=== SO SÁNH HAI CỘT: {columnA} ↔ {columnB} ===\n");
 
             // So sánh từng dòng
-            Console.WriteLine("1. Các dòng có giá trị khác nhau:");
+            Console.WriteLine("1️⃣ Các dòng có giá trị khác nhau:");
             for (int i = 0; i < records.Count; i++)
             {
                 var valueA = records[i].GetValueOrDefault(columnA, "").ToString();
@@ -46,7 +46,7 @@ namespace CsvCompareApp.Services
             // So sánh số lần xuất hiện
             var allKeys = countsInA.Keys.Union(countsInB.Keys).ToList();
             
-            Console.WriteLine("\n2. Số lần xuất hiện khác nhau:");
+            Console.WriteLine("\n2️⃣ Số lần xuất hiện khác nhau:");
             foreach (var key in allKeys)
             {
                 int countA = countsInA.GetValueOrDefault(key, 0);
@@ -54,7 +54,7 @@ namespace CsvCompareApp.Services
                 
                 if (countA != countB)
                 {
-                    string mismatch = $"   Giá trị '{key}': {columnA}: {countA} lần, {columnB}: {countB} lần";
+                    string mismatch = $"   📊 Giá trị '{key}': {columnA}: {countA} lần, {columnB}: {countB} lần";
                     Console.WriteLine(mismatch);
                     result.AmountMismatches.Add(mismatch);
                 }
@@ -64,20 +64,20 @@ namespace CsvCompareApp.Services
             var onlyInA = countsInA.Keys.Where(k => !countsInB.ContainsKey(k));
             var onlyInB = countsInB.Keys.Where(k => !countsInA.ContainsKey(k));
 
-            Console.WriteLine("\n3. Chỉ có trong " + columnA + ":");
+            Console.WriteLine($"\n3️⃣ Chỉ có trong {columnA}:");
             foreach (var a in onlyInA)
             {
-                string onlyA = $"   {a} ({countsInA[a]} lần)";
+                string onlyA = $"   ➡️ {a} ({countsInA[a]} lần)";
                 Console.WriteLine(onlyA);
                 result.OnlyInFirst.Add(onlyA);
             }
             
             if (!onlyInA.Any())
             {
-                Console.WriteLine($"   Không có giá trị nào chỉ có trong {columnA}.");
+                Console.WriteLine($"   ✅ Không có giá trị nào chỉ có trong {columnA}.");
             }
 
-            Console.WriteLine("\n4. Chỉ có trong " + columnB + ":");
+            Console.WriteLine($"\n4️⃣ Chỉ có trong {columnB}:");
             foreach (var b in onlyInB)
             {
                 string onlyB = $"   {b} ({countsInB[b]} lần)";
