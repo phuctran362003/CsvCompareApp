@@ -102,20 +102,22 @@ namespace CsvCompareApp.Services
         {
             var result = new ComparisonResult();
             
-            Console.WriteLine($"=== SO SÁNH NHÓM CỘT: {groupA.GroupName} vs {groupB.GroupName} ===\n");
+            Console.WriteLine($"=== 🔍 ĐỐI CHIẾU DỮ LIỆU: {groupA.GroupName} ↔ {groupB.GroupName} ===\n");
 
-            // Tạo dictionary cho mỗi nhóm
+            // Tạo dictionary cho mỗi nhóm với ID dưới dạng số nguyên
             var dictA = CreateGroupDictionary(records, groupA);
             var dictB = CreateGroupDictionary(records, groupB);
 
             result.TotalFirstGroup = dictA.Count;
             result.TotalSecondGroup = dictB.Count;
 
+            Console.WriteLine($"📊 Đã tải: {dictA.Count} dòng từ {groupA.GroupName}, {dictB.Count} dòng từ {groupB.GroupName}\n");
+
             // 1. So sánh ID khớp nhưng Amount khác
-            Console.WriteLine($"1. {groupA.GroupName} và {groupB.GroupName} khớp ID nhưng lệch Amount:");
+            Console.WriteLine($"1️⃣ 💰 CÁC ID KHỚP NHƯNG SỐ TIỀN KHÁC NHAU:");
             foreach (var kvp in dictA)
             {
-                string id = kvp.Key;
+                long id = kvp.Key;
                 decimal amountA = kvp.Value;
                 
                 if (dictB.ContainsKey(id))
@@ -123,7 +125,9 @@ namespace CsvCompareApp.Services
                     decimal amountB = dictB[id];
                     if (amountA != amountB)
                     {
-                        string mismatch = $"   ID: {id} | {groupA.GroupName}: {amountA:C} | {groupB.GroupName}: {amountB:C} | Chênh lệch: {amountA - amountB:C}";
+                        var difference = amountA - amountB;
+                        string sign = difference > 0 ? "+" : "";
+                        string mismatch = $"   🆔 ID: {id:D6} | {groupA.GroupName}: {amountA:N0}đ | {groupB.GroupName}: {amountB:N0}đ | 📈 Chênh: {sign}{difference:N0}đ";
                         Console.WriteLine(mismatch);
                         result.AmountMismatches.Add(mismatch);
                     }
@@ -132,62 +136,110 @@ namespace CsvCompareApp.Services
             
             if (result.AmountMismatches.Count == 0)
             {
-                Console.WriteLine("   Không có ID nào lệch Amount.");
+                Console.WriteLine("   ✅ Tuyệt vời! Không có ID nào lệch số tiền.");
             }
 
             // 2. ID chỉ có ở nhóm A
-            Console.WriteLine($"\n2. ID chỉ có ở {groupA.GroupName}:");
+            Console.WriteLine($"\n2️⃣ ➡️ CÁC ID CHỈ CÓ TRONG {groupA.GroupName}:");
             var onlyInA = dictA.Keys.Where(id => !dictB.ContainsKey(id)).ToList();
             foreach (var id in onlyInA)
             {
-                string onlyA = $"   ID: {id} | Amount: {dictA[id]:C}";
+                string onlyA = $"   🔹 ID: {id:D6} | Số tiền: {dictA[id]:N0}đ";
                 Console.WriteLine(onlyA);
                 result.OnlyInFirst.Add(onlyA);
             }
             
             if (onlyInA.Count == 0)
             {
-                Console.WriteLine($"   Không có ID nào chỉ có ở {groupA.GroupName}.");
+                Console.WriteLine($"   ✅ Không có ID nào chỉ có trong {groupA.GroupName}.");
             }
 
             // 3. ID chỉ có ở nhóm B
-            Console.WriteLine($"\n3. ID chỉ có ở {groupB.GroupName}:");
+            Console.WriteLine($"\n3️⃣ ⬅️ CÁC ID CHỈ CÓ TRONG {groupB.GroupName}:");
             var onlyInB = dictB.Keys.Where(id => !dictA.ContainsKey(id)).ToList();
             foreach (var id in onlyInB)
             {
-                string onlyB = $"   ID: {id} | Amount: {dictB[id]:C}";
+                string onlyB = $"   🔸 ID: {id:D6} | Số tiền: {dictB[id]:N0}đ";
                 Console.WriteLine(onlyB);
                 result.OnlyInSecond.Add(onlyB);
             }
             
             if (onlyInB.Count == 0)
             {
-                Console.WriteLine($"   Không có ID nào chỉ có ở {groupB.GroupName}.");
+                Console.WriteLine($"   ✅ Không có ID nào chỉ có trong {groupB.GroupName}.");
             }
 
             // Tính số khớp hoàn toàn
             result.PerfectMatches = dictA.Keys.Count(id => dictB.ContainsKey(id) && dictA[id] == dictB[id]);
 
+            // Tổng kết với emoji và định dạng đẹp hơn
+            Console.WriteLine($"\n" + new string('=', 55));
+            Console.WriteLine($"📋 TỔNG KẾT ĐỐI CHIẾU");
+            Console.WriteLine($"" + new string('=', 55));
+            Console.WriteLine($"📊 Tổng ID trong {groupA.GroupName}: {result.TotalFirstGroup:N0}");
+            Console.WriteLine($"📊 Tổng ID trong {groupB.GroupName}: {result.TotalSecondGroup:N0}");
+            Console.WriteLine($"✅ ID khớp hoàn toàn: {result.PerfectMatches:N0}");
+            Console.WriteLine($"💰 ID lệch số tiền: {result.AmountMismatches.Count:N0}");
+            Console.WriteLine($"➡️ ID chỉ có trong {groupA.GroupName}: {result.OnlyInFirst.Count:N0}");
+            Console.WriteLine($"⬅️ ID chỉ có trong {groupB.GroupName}: {result.OnlyInSecond.Count:N0}");
+            
+            if (result.AmountMismatches.Count == 0 && result.OnlyInFirst.Count == 0 && result.OnlyInSecond.Count == 0)
+            {
+                Console.WriteLine($"\n🎉 HOÀN HẢO! Tất cả dữ liệu đều khớp nhau!");
+            }
+            else
+            {
+                var totalIssues = result.AmountMismatches.Count + result.OnlyInFirst.Count + result.OnlyInSecond.Count;
+                Console.WriteLine($"\n⚠️ Phát hiện {totalIssues:N0} điểm khác biệt cần kiểm tra");
+            }
+            Console.WriteLine("" + new string('=', 55) + "\n");
+
             return result;
         }
 
-        private Dictionary<string, decimal> CreateGroupDictionary(List<Dictionary<string, object>> records, 
+        private Dictionary<long, decimal> CreateGroupDictionary(List<Dictionary<string, object>> records, 
             GroupColumnConfiguration config)
         {
-            var dictionary = new Dictionary<string, decimal>();
+            var dictionary = new Dictionary<long, decimal>();
             
             foreach (var record in records)
             {
                 var idValue = record.GetValueOrDefault(config.IdColumn, "").ToString();
                 var amountValue = record.GetValueOrDefault(config.AmountColumn, "0").ToString();
                 
-                if (!string.IsNullOrEmpty(idValue) && decimal.TryParse(amountValue, out decimal amount))
+                if (!string.IsNullOrEmpty(idValue) && TryParseId(idValue, out long id))
                 {
-                    dictionary[idValue] = amount;
+                    // Parse amount - loại bỏ dấu phẩy và khoảng trắng
+                    var cleanAmount = amountValue?.Replace(",", "").Replace(" ", "").Trim() ?? "0";
+                    if (decimal.TryParse(cleanAmount, out decimal amount))
+                    {
+                        dictionary[id] = amount;
+                    }
                 }
             }
             
             return dictionary;
+        }
+
+        private bool TryParseId(string idString, out long id)
+        {
+            id = 0;
+            if (string.IsNullOrWhiteSpace(idString))
+                return false;
+
+            // Loại bỏ khoảng trắng và các ký tự không cần thiết
+            var cleanId = idString.Trim().Replace(" ", "");
+            
+            // Thử parse trực tiếp
+            if (long.TryParse(cleanId, out id))
+                return true;
+            
+            // Nếu có số 0 đầu hoặc ký tự đặc biệt, extract số
+            var numberOnly = new string(cleanId.Where(char.IsDigit).ToArray());
+            if (!string.IsNullOrEmpty(numberOnly) && long.TryParse(numberOnly, out id))
+                return true;
+            
+            return false;
         }
 
         public void PrintSummary(ComparisonResult result, ComparisonType comparisonType)

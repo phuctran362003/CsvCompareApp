@@ -62,16 +62,17 @@ namespace CsvCompareApp.Services
 
         public ComparisonType GetComparisonType()
         {
-            Console.WriteLine("\nChọn loại so sánh:");
-            Console.WriteLine("1. So sánh hai cột đơn (A vs B)");
-            Console.WriteLine("2. So sánh nhóm cột (ID + Amount)");
+            Console.WriteLine("\n📋 Chọn cách so sánh dữ liệu:");
+            Console.WriteLine("1. 🔤 So sánh nội dung từng cột (dữ liệu text)");
+            Console.WriteLine("2. 🆔 So sánh theo ID và số tiền (bên A với bên B)");
+            Console.WriteLine("   → Phù hợp cho đối chiếu hóa đơn, báo cáo tài chính");
             
             int attempts = 0;
             const int maxAttempts = 5;
             
             while (attempts < maxAttempts)
             {
-                Console.Write("Nhập lựa chọn (1 hoặc 2): ");
+                Console.Write("👉 Chọn phương án (1 hoặc 2): ");
                 string? input = Console.ReadLine();
                 
                 if (string.IsNullOrEmpty(input))
@@ -172,11 +173,13 @@ namespace CsvCompareApp.Services
 
         public (GroupColumnConfiguration, GroupColumnConfiguration) SelectGroupColumns(List<string> availableColumns)
         {
-            Console.WriteLine("\n=== CẤU HÌNH NHÓM 1 ===");
-            var group1 = ConfigureGroup(availableColumns, "Nhóm 1");
+            Console.WriteLine("\n=== CẤU HÌNH BÊN A (Nguồn 1) ===");
+            Console.WriteLine("💼 Chọn cột ID và số tiền của bên A");
+            var group1 = ConfigureGroup(availableColumns, "Bên A");
             
-            Console.WriteLine("\n=== CẤU HÌNH NHÓM 2 ===");
-            var group2 = ConfigureGroup(availableColumns, "Nhóm 2");
+            Console.WriteLine("\n=== CẤU HÌNH BÊN B (Nguồn 2) ===");
+            Console.WriteLine("💼 Chọn cột ID và số tiền của bên B");
+            var group2 = ConfigureGroup(availableColumns, "Bên B");
             
             return (group1, group2);
         }
@@ -187,21 +190,21 @@ namespace CsvCompareApp.Services
             
             if (availableColumns.Any())
             {
-                Console.WriteLine("Các cột có sẵn:");
+                Console.WriteLine("📋 Các cột có sẵn trong file:");
                 for (int i = 0; i < availableColumns.Count; i++)
                 {
-                    Console.WriteLine($"{i + 1}. {availableColumns[i]}");
+                    Console.WriteLine($"   {i + 1}. {availableColumns[i]}");
                 }
                 
-                config.IdColumn = SelectColumn(availableColumns, $"Chọn cột ID cho {groupName}");
-                config.AmountColumn = SelectColumn(availableColumns, $"Chọn cột Amount cho {groupName}");
+                config.IdColumn = SelectColumn(availableColumns, $"🆔 Chọn cột chứa mã ID/hóa đơn của {groupName}");
+                config.AmountColumn = SelectColumn(availableColumns, $"💰 Chọn cột chứa số tiền của {groupName}");
             }
             else
             {
-                Console.Write($"Nhập tên cột ID cho {groupName}: ");
+                Console.Write($"🆔 Nhập tên cột ID cho {groupName}: ");
                 config.IdColumn = Console.ReadLine() ?? "";
                 
-                Console.Write($"Nhập tên cột Amount cho {groupName}: ");
+                Console.Write($"💰 Nhập tên cột số tiền cho {groupName}: ");
                 config.AmountColumn = Console.ReadLine() ?? "";
             }
             
