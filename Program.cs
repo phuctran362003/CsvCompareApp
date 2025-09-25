@@ -1,113 +1,94 @@
-﻿using System.Globalization;
-using CsvHelper;
-using CsvHelper.Configuration;
+﻿using CsvCompareApp.Models;
+using CsvCompareApp.Services;
 
-class Program
+namespace CsvCompareApp
 {
-    static void Main(string[] args)
+    class Program
     {
-        var filePath = @"D:\FPT\projects\CsvCompareApp\Book3.csv"; // đường dẫn tuyệt đối đến file CSV
-        using var reader = new StreamReader(filePath);
-        
-        // Cấu hình để đọc file CSV với header
-        var config = new CsvConfiguration(CultureInfo.InvariantCulture)
+        static void Main(string[] args)
         {
-            HasHeaderRecord = true
-        };
-        using var csv = new CsvReader(reader, config);
-        
-        var records = csv.GetRecords<InvoiceData>().ToList();
+            var csvReaderService = new CsvReaderService();
+            var comparisonService = new ComparisonService();
+            var userInterfaceService = new UserInterfaceService(csvReaderService);
 
-        // Tạo dictionary cho Nhóm A và Nhóm B để so sánh theo ID
-        var groupA = records
-            .Where(r => !string.IsNullOrEmpty(r.ID_A))
-            .ToDictionary(r => r.ID_A!, r => r.Amount_A);
-
-        var groupB = records
-            .Where(r => !string.IsNullOrEmpty(r.ID_B))
-            .ToDictionary(r => r.ID_B!, r => r.Amount_B);
-
-        Console.WriteLine("=== KẾT QUẢ SO SÁNH HÓA ĐƠN ===\n");
-
-        // 1. So sánh hóa đơn có cùng ID nhưng khác số tiền
-        Console.WriteLine("1. Hóa đơn khớp ID nhưng lệch số tiền:");
-        var amountMismatches = new List<string>();
-        foreach (var kvp in groupA)
-        {
-            string id = kvp.Key;
-            decimal amountA = kvp.Value;
-            
-            if (groupB.ContainsKey(id))
+            try
             {
-                decimal amountB = groupB[id];
-                if (amountA != amountB)
+                do
                 {
-                    string message = $"   ID: {id} | Amount_A: {amountA:C} | Amount_B: {amountB:C} | Chênh lệch: {amountA - amountB:C}";
-                    Console.WriteLine(message);
-                    amountMismatches.Add(message);
-                }
-            }
-        }
-        if (amountMismatches.Count == 0)
-        {
-            Console.WriteLine("   Không có hóa đơn nào lệch số tiền.");
-        }
+                    // 1. Lấy đường dẫn file
+                    string filePath = userInterfaceService.GetFilePath();
 
-        // 2. Hóa đơn chỉ có ở Nhóm A (thiếu ở B)
-        Console.WriteLine("\n2. Hóa đơn chỉ có ở Nhóm A (thiếu ở Nhóm B):");
-        var onlyInA = groupA.Keys.Where(id => !groupB.ContainsKey(id)).ToList();
-        if (onlyInA.Count > 0)
-        {
-            foreach (var id in onlyInA)
+                    // 2. Chọn loại so sánh
+                    ComparisonType comparisonType = userInterfaceService.GetComparisonType();
+
+                    // 3. Kiểm tra có header không
+                    bool hasHeader = userInterfaceService.GetHasHeaderOption();
+
+                    // 4. Đọc header nếu có
+                    List<string> availableColumns = new List<string>();
+                    if (hasHeader)
+                    {
+                        availableColumns = csvReaderService.GetCsvHeaders(filePath);
+                        if (availableColumns.Any())
+                        {
+                            Console.WriteLine("\nCác cột phát hiện trong file:");
+                            for (int i = 0; i < availableColumns.Count; i++)
+                            {
+                                Console.WriteLine($"  {i + 1}. {availableColumns[i]}");
+                            }
+                        }
+                    }
+
+                    // 5. Cấu hình cột dựa trên loại so sánh
+                    ColumnConfiguration columnConfig;
+                    ComparisonResult result;
+
+                    if (comparisonType == ComparisonType.TwoColumns)
+                    {
+                        var (column1, column2) = userInterfaceService.SelectTwoColumns(availableColumns, hasHeader);
+                        
+                        columnConfig = new ColumnConfiguration
+                        {
+                            FilePath = filePath,
+                            HasHeaderRecord = hasHeader,
+                            ColumnNames = new List<string> { column1, column2 }
+                        };
+
+                        var records = csvReaderService.ReadCsvFile(columnConfig);
+                        result = comparisonService.CompareTwoColumns(records, column1, column2);
+                    }
+                    else
+                    {
+                        var (groupA, groupB) = userInterfaceService.SelectGroupColumns(availableColumns, hasHeader);
+                        
+                        columnConfig = new ColumnConfiguration
+                        {
+                            FilePath = filePath,
+                            HasHeaderRecord = hasHeader,
+                            ColumnNames = new List<string> 
+                            { 
+                                groupA.IdColumn, groupA.AmountColumn,
+                                groupB.IdColumn, groupB.AmountColumn 
+                            }
+                        };
+
+                        var records = csvReaderService.ReadCsvFile(columnConfig);
+                        result = comparisonService.CompareGroupColumns(records, groupA, groupB);
+                    }
+
+                    // 6. In tóm tắt
+                    comparisonService.PrintSummary(result, comparisonType);
+
+                } while (userInterfaceService.AskToContinue());
+
+                Console.WriteLine("\nCảm ơn bạn đã sử dụng CSV Comparison Tool!");
+            }
+            catch (Exception ex)
             {
-                Console.WriteLine($"   ID: {id} | Amount: {groupA[id]:C}");
+                Console.WriteLine($"Đã xảy ra lỗi: {ex.Message}");
+                Console.WriteLine("Nhấn Enter để thoát...");
+                Console.ReadLine();
             }
         }
-        else
-        {
-            Console.WriteLine("   Không có hóa đơn nào chỉ có ở Nhóm A.");
-        }
-
-        // 3. Hóa đơn chỉ có ở Nhóm B (thiếu ở A)
-        Console.WriteLine("\n3. Hóa đơn chỉ có ở Nhóm B (thiếu ở Nhóm A):");
-        var onlyInB = groupB.Keys.Where(id => !groupA.ContainsKey(id)).ToList();
-        if (onlyInB.Count > 0)
-        {
-            foreach (var id in onlyInB)
-            {
-                Console.WriteLine($"   ID: {id} | Amount: {groupB[id]:C}");
-            }
-        }
-        else
-        {
-            Console.WriteLine("   Không có hóa đơn nào chỉ có ở Nhóm B.");
-        }
-
-        // 4. Tóm tắt
-        Console.WriteLine("\n=== TÓM TẮT ===");
-        Console.WriteLine($"Tổng số hóa đơn Nhóm A: {groupA.Count}");
-        Console.WriteLine($"Tổng số hóa đơn Nhóm B: {groupB.Count}");
-        Console.WriteLine($"Hóa đơn khớp ID nhưng lệch tiền: {amountMismatches.Count}");
-        Console.WriteLine($"Hóa đơn chỉ có ở A: {onlyInA.Count}");
-        Console.WriteLine($"Hóa đơn chỉ có ở B: {onlyInB.Count}");
-        
-        // Tính số hóa đơn khớp hoàn toàn
-        var perfectMatches = groupA.Keys.Where(id => groupB.ContainsKey(id) && groupA[id] == groupB[id]).Count();
-        Console.WriteLine($"Hóa đơn khớp hoàn toàn (ID và Amount): {perfectMatches}");
-    }
-
-    public class InvoiceData
-    {
-        [CsvHelper.Configuration.Attributes.Name("ID_A")]
-        public string? ID_A { get; set; }
-        
-        [CsvHelper.Configuration.Attributes.Name("Amount_A")]
-        public decimal Amount_A { get; set; }
-        
-        [CsvHelper.Configuration.Attributes.Name("ID_B")]
-        public string? ID_B { get; set; }
-        
-        [CsvHelper.Configuration.Attributes.Name("Amount_B")]
-        public decimal Amount_B { get; set; }
     }
 }
