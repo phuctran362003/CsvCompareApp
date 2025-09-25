@@ -11,6 +11,9 @@ namespace CsvCompareApp
             // Đảm bảo Console hỗ trợ UTF-8 cho tiếng Việt
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
+            
+            Console.WriteLine("🚀 Bắt đầu chương trình so sánh CSV...\n");
+            
             var csvReaderService = new CsvReaderService();
             var comparisonService = new ComparisonService();
             var userInterfaceService = new UserInterfaceService(csvReaderService);

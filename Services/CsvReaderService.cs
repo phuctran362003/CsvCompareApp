@@ -3,6 +3,7 @@ using System.Text;
 using CsvHelper;
 using CsvHelper.Configuration;
 using CsvCompareApp.Models;
+using ClosedXML.Excel;
 
 namespace CsvCompareApp.Services
 {
@@ -10,7 +11,97 @@ namespace CsvCompareApp.Services
     {
         public List<Dictionary<string, object>> ReadCsvFile(ColumnConfiguration config)
         {
-            return ReadCsvFileWithEncoding(config, null);
+            // Kiểm tra extension của file để quyết định phương thức đọc
+            var extension = Path.GetExtension(config.FilePath).ToLowerInvariant();
+            
+            if (extension == ".xlsx" || extension == ".xls")
+            {
+                return ReadExcelFile(config);
+            }
+            else
+            {
+                return ReadCsvFileWithEncoding(config, null);
+            }
+        }
+
+        public List<Dictionary<string, object>> ReadExcelFile(ColumnConfiguration config)
+        {
+            try
+            {
+                Console.WriteLine($"📊 Đang đọc file Excel: {config.FilePath}");
+                
+                using var workbook = new XLWorkbook(config.FilePath);
+                var worksheet = workbook.Worksheet(1); // Đọc sheet đầu tiên
+                
+                Console.WriteLine($"📋 Sheet: {worksheet.Name}");
+                
+                var records = new List<Dictionary<string, object>>();
+                var rows = worksheet.RowsUsed().ToList();
+                
+                if (rows.Count == 0)
+                {
+                    Console.WriteLine("⚠️ File Excel trống!");
+                    return records;
+                }
+
+                var firstRow = rows[0];
+                var totalColumns = firstRow.CellsUsed().Count();
+                Console.WriteLine($"📊 Phát hiện {totalColumns} cột trong file Excel");
+                
+                int startRowIndex = config.HasHeaderRecord ? 1 : 0; // Bắt đầu từ dòng 1 nếu có header, ngược lại từ dòng 0
+                
+                // Lấy danh sách column names từ config hoặc tạo tự động
+                var columnNames = config.ColumnNames;
+                if (columnNames.Count < totalColumns)
+                {
+                    // Nếu config không đủ cột, tạo thêm cột
+                    var additionalColumns = GenerateColumnNames(totalColumns);
+                    columnNames = additionalColumns.Take(totalColumns).ToList();
+                    Console.WriteLine($"🔧 Đã tạo thêm tên cột: [{string.Join(", ", columnNames)}]");
+                }
+                
+                // Handle duplicate column names by using column indexes
+                var uniqueColumnKeys = new List<string>();
+                for (int i = 0; i < Math.Min(columnNames.Count, totalColumns); i++)
+                {
+                    uniqueColumnKeys.Add($"{columnNames[i]}#{i+1}");
+                }
+                
+                // Đọc dữ liệu từ các dòng
+                for (int rowIndex = startRowIndex; rowIndex < rows.Count; rowIndex++)
+                {
+                    var row = rows[rowIndex];
+                    var record = new Dictionary<string, object>();
+                    
+                    var cells = row.CellsUsed().ToList();
+                    
+                    // Đọc từng cột
+                    for (int colIndex = 0; colIndex < totalColumns && colIndex < columnNames.Count; colIndex++)
+                    {
+                        string value = "";
+                        
+                        // Tìm cell tương ứng với column index (Excel có thể có gap)
+                        var cell = cells.FirstOrDefault(c => c.Address.ColumnNumber == colIndex + 1);
+                        if (cell != null)
+                        {
+                            value = cell.GetValue<string>() ?? "";
+                        }
+                        
+                        // Store with unique key to avoid duplicate key issues
+                        record[uniqueColumnKeys[colIndex]] = value;
+                    }
+                    
+                    records.Add(record);
+                }
+                
+                Console.WriteLine($"✅ Đã đọc {records.Count} dòng từ file Excel");
+                return records;
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Lỗi khi đọc file Excel: {ex.Message}");
+                return new List<Dictionary<string, object>>();
+            }
         }
         
         public List<Dictionary<string, object>> ReadCsvFileWithEncoding(ColumnConfiguration config, Encoding? forcedEncoding)
@@ -44,19 +135,22 @@ namespace CsvCompareApp.Services
                     csv.Read();
                     csv.ReadHeader();
                     
+                    // Use unique headers for reading
+                    var uniqueHeaders = GetUniqueHeaders(csv.HeaderRecord);
+                    
                     while (csv.Read())
                     {
                         var record = new Dictionary<string, object>();
-                        foreach (var columnName in config.ColumnNames)
+                        for (int i = 0; i < uniqueHeaders.Count; i++)
                         {
                             try
                             {
-                                var value = csv.GetField(columnName);
-                                record[columnName] = value ?? "";
+                                var value = csv.GetField(i);
+                                record[uniqueHeaders[i]] = value ?? "";
                             }
                             catch
                             {
-                                record[columnName] = "";
+                                record[uniqueHeaders[i]] = "";
                             }
                         }
                         records.Add(record);
@@ -86,6 +180,87 @@ namespace CsvCompareApp.Services
         }
 
         public (bool hasHeader, List<string> columns) AnalyzeCsvFile(string filePath)
+        {
+            var extension = Path.GetExtension(filePath).ToLowerInvariant();
+            
+            if (extension == ".xlsx" || extension == ".xls")
+            {
+                return AnalyzeExcelFile(filePath);
+            }
+            else
+            {
+                return AnalyzeCsvFileInternal(filePath);
+            }
+        }
+
+        public (bool hasHeader, List<string> columns) AnalyzeExcelFile(string filePath)
+        {
+            try
+            {
+                Console.WriteLine($"🔍 Đang phân tích file Excel: {filePath}");
+                
+                using var workbook = new XLWorkbook(filePath);
+                var worksheet = workbook.Worksheet(1);
+                
+                var rows = worksheet.RowsUsed().ToList();
+                if (rows.Count == 0)
+                {
+                    return (false, new List<string>());
+                }
+
+                var firstRow = rows[0];
+                var totalColumns = firstRow.CellsUsed().Count();
+                
+                Console.WriteLine($"📊 Phát hiện {totalColumns} cột trong Excel");
+                
+                // Đọc dòng đầu tiên
+                var firstRowValues = new List<string>();
+                for (int i = 1; i <= totalColumns; i++)
+                {
+                    var cellValue = firstRow.Cell(i).GetValue<string>() ?? "";
+                    firstRowValues.Add(cellValue);
+                }
+                
+                // Nếu chỉ có 1 dòng, coi như không có header
+                if (rows.Count < 2)
+                {
+                    var columnNames = GenerateColumnNames(totalColumns);
+                    Console.WriteLine($"📊 Chỉ có 1 dòng, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
+                    return (false, columnNames);
+                }
+                
+                // Đọc dòng thứ hai
+                var secondRow = rows[1];
+                var secondRowValues = new List<string>();
+                for (int i = 1; i <= totalColumns; i++)
+                {
+                    var cellValue = secondRow.Cell(i).GetValue<string>() ?? "";
+                    secondRowValues.Add(cellValue);
+                }
+                
+                // Phân tích xem dòng đầu có phải header không
+                bool hasHeader = DetectHeader(firstRowValues, secondRowValues);
+                
+                if (hasHeader)
+                {
+                    Console.WriteLine($"✅ Phát hiện header trong Excel: [{string.Join(", ", firstRowValues)}]");
+                    return (true, firstRowValues);
+                }
+                else
+                {
+                    var columnNames = GenerateColumnNames(totalColumns);
+                    Console.WriteLine($"📊 Không có header, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
+                    return (false, columnNames);
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"❌ Lỗi khi phân tích file Excel: {ex.Message}");
+                return (false, new List<string>());
+            }
+        }
+
+        private (bool hasHeader, List<string> columns) AnalyzeCsvFileInternal(string filePath)
         {
             try
             {
@@ -133,8 +308,9 @@ namespace CsvCompareApp.Services
                 
                 if (hasHeader)
                 {
-                    Console.WriteLine($"✅ Phát hiện header: [{string.Join(", ", firstRow)}]");
-                    return (true, firstRow);
+                    var uniqueHeaders = GetUniqueHeaders(firstRow);
+                    Console.WriteLine($"✅ Phát hiện header: [{string.Join(", ", uniqueHeaders)}]");
+                    return (true, uniqueHeaders);
                 }
                 else
                 {
@@ -201,6 +377,12 @@ namespace CsvCompareApp.Services
         {
             var (hasHeader, columns) = AnalyzeCsvFile(filePath);
             return columns;
+        }
+
+        public List<string> GetFileHeaders(string filePath)
+        {
+            // Method tổng quát cho cả CSV và Excel
+            return GetCsvHeaders(filePath);
         }
 
         private Encoding DetectFileEncoding(string filePath)
@@ -335,6 +517,27 @@ namespace CsvCompareApp.Services
                 }
             }
             return false;
+        }
+
+        private List<string> GetUniqueHeaders(IEnumerable<string> headers)
+        {
+            var uniqueHeaders = new List<string>();
+            var counts = new Dictionary<string, int>();
+            
+            foreach (var header in headers)
+            {
+                if (counts.ContainsKey(header))
+                {
+                    counts[header]++;
+                    uniqueHeaders.Add($"{header}_{counts[header]}");
+                }
+                else
+                {
+                    counts[header] = 1;
+                    uniqueHeaders.Add(header);
+                }
+            }
+            return uniqueHeaders;
         }
     }
 }

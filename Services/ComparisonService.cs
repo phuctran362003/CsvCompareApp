@@ -104,9 +104,9 @@ namespace CsvCompareApp.Services
             
             Console.WriteLine($"=== 🔍 ĐỐI CHIẾU DỮ LIỆU: {groupA.GroupName} ↔ {groupB.GroupName} ===\n");
 
-            // Tạo dictionary cho mỗi nhóm với ID dưới dạng số nguyên
-            var dictA = CreateGroupDictionary(records, groupA);
-            var dictB = CreateGroupDictionary(records, groupB);
+            // Create dictionaries for each group
+            var dictA = CreateGroupDictionary(records, groupA.IdColumn, groupA.AmountColumn);
+            var dictB = CreateGroupDictionary(records, groupB.IdColumn, groupB.AmountColumn);
 
             result.TotalFirstGroup = dictA.Count;
             result.TotalSecondGroup = dictB.Count;
@@ -198,14 +198,14 @@ namespace CsvCompareApp.Services
         }
 
         private Dictionary<long, decimal> CreateGroupDictionary(List<Dictionary<string, object>> records, 
-            GroupColumnConfiguration config)
+            string idColumn, string amountColumn)
         {
             var dictionary = new Dictionary<long, decimal>();
             
             foreach (var record in records)
             {
-                var idValue = record.GetValueOrDefault(config.IdColumn, "").ToString();
-                var amountValue = record.GetValueOrDefault(config.AmountColumn, "0").ToString();
+                var idValue = record.GetValueOrDefault(idColumn, "").ToString();
+                var amountValue = record.GetValueOrDefault(amountColumn, "0").ToString();
                 
                 if (!string.IsNullOrEmpty(idValue) && TryParseId(idValue, out long id))
                 {
@@ -264,6 +264,60 @@ namespace CsvCompareApp.Services
                 Console.WriteLine($"ID chỉ có ở nhóm 2: {result.OnlyInSecond.Count}");
                 Console.WriteLine($"ID khớp hoàn toàn (ID và Amount): {result.PerfectMatches}");
             }
+        }
+        
+        // Helper method to find the index of a column in keys collection
+        private int FindColumnIndex(IEnumerable<string> keys, string columnName)
+        {
+            // First try to find exact match
+            int index = 1;
+            foreach (var key in keys)
+            {
+                if (key == columnName)
+                    return index;
+                    
+                if (key.StartsWith($"{columnName}#"))
+                    return int.Parse(key.Substring(columnName.Length + 1));
+                    
+                index++;
+            }
+            
+            // Then look for keys ending with the column index
+            var matchingKey = keys.FirstOrDefault(k => k.EndsWith($"#{columnName}") || k.Contains($"#{columnName}#"));
+            if (matchingKey != null)
+            {
+                var parts = matchingKey.Split('#');
+                if (parts.Length > 1 && int.TryParse(parts[1], out int colIndex))
+                {
+                    return colIndex;
+                }
+            }
+            
+            return 1; // Default to first column if not found
+        }
+        
+        // Helper method to get column value by occurrence index
+        private string GetColumnValueByIndex(Dictionary<string, object> record, string columnName, int occurrenceIndex)
+        {
+            // Since we have duplicate column names, we need to find the nth occurrence
+            // For now, since the CSV reader only stores the last value for duplicate keys,
+            // we'll need to work with what we have
+            
+            // If the record has the column name as key, return its value
+            if (record.ContainsKey(columnName))
+            {
+                return record[columnName]?.ToString() ?? "";
+            }
+            
+            // Try to find unique keys
+            var uniqueKeys = record.Keys.Where(k => k.StartsWith($"{columnName}#")).ToList();
+            if (uniqueKeys.Count >= occurrenceIndex)
+            {
+                var key = uniqueKeys[occurrenceIndex - 1];
+                return record[key]?.ToString() ?? "";
+            }
+            
+            return "";
         }
     }
 }
