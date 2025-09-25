@@ -4,14 +4,61 @@ namespace CsvCompareApp.Services
 {
     public class ComparisonService
     {
-        public ComparisonResult CompareTwoColumns(List<Dictionary<string, object>> records, string columnA, string columnB)
+        public GroupComparisonResult CompareGroupColumns(List<Dictionary<string, object>> records, GroupColumnConfiguration config)
         {
-            var result = new ComparisonResult();
+            Console.WriteLine($"\n--- ĐỐI CHIẾU DỮ LIỆU NHÓM ---");
+
+            // Create dictionaries for each group using the correct unique column keys
+            var dictA = CreateGroupDictionary(records, config.GroupAIdColumn, config.GroupAAmountColumn);
+            var dictB = CreateGroupDictionary(records, config.GroupBIdColumn, config.GroupBAmountColumn);
+
+            Console.WriteLine($"Đã tải: {dictA.Count} mục từ Nhóm A, {dictB.Count} mục từ Nhóm B\n");
+
+            var result = new GroupComparisonResult
+            {
+                TotalInGroupA = dictA.Count,
+                TotalInGroupB = dictB.Count
+            };
+
+            var allIds = dictA.Keys.Union(dictB.Keys).ToHashSet();
+
+            foreach (var id in allIds)
+            {
+                bool inA = dictA.TryGetValue(id, out var amountA);
+                bool inB = dictB.TryGetValue(id, out var amountB);
+
+                if (inA && inB)
+                {
+                    if (amountA == amountB)
+                    {
+                        result.Matches.Add(new MatchedItem { Id = id, Amount = amountA });
+                    }
+                    else
+                    {
+                        result.Mismatches.Add(new MismatchedItem { Id = id, AmountA = amountA, AmountB = amountB });
+                    }
+                }
+                else if (inA)
+                {
+                    result.OnlyInA.Add(new GroupItem { Id = id, Amount = amountA });
+                }
+                else
+                {
+                    result.OnlyInB.Add(new GroupItem { Id = id, Amount = amountB });
+                }
+            }
             
-            Console.WriteLine($"=== SO SÁNH HAI CỘT: {columnA} ↔ {columnB} ===\n");
+            return result;
+        }
+
+        public TwoColumnComparisonResult CompareTwoColumns(List<Dictionary<string, object>> records, string columnA, string columnB)
+        {
+            var result = new TwoColumnComparisonResult();
+            
+            Console.WriteLine($"=== SO SÁNH HAI CỘT: {columnA} vs {columnB} ===\n");
 
             // So sánh từng dòng
-            Console.WriteLine("1️⃣ Các dòng có giá trị khác nhau:");
+            Console.WriteLine("Các dòng có giá trị khác nhau:");
             for (int i = 0; i < records.Count; i++)
             {
                 var valueA = records[i].GetValueOrDefault(columnA, "").ToString();
@@ -46,7 +93,7 @@ namespace CsvCompareApp.Services
             // So sánh số lần xuất hiện
             var allKeys = countsInA.Keys.Union(countsInB.Keys).ToList();
             
-            Console.WriteLine("\n2️⃣ Số lần xuất hiện khác nhau:");
+            Console.WriteLine("\nSố lần xuất hiện khác nhau:");
             foreach (var key in allKeys)
             {
                 int countA = countsInA.GetValueOrDefault(key, 0);
@@ -54,7 +101,7 @@ namespace CsvCompareApp.Services
                 
                 if (countA != countB)
                 {
-                    string mismatch = $"   📊 Giá trị '{key}': {columnA}: {countA} lần, {columnB}: {countB} lần";
+                    string mismatch = $"   Giá trị '{key}': {columnA}: {countA} lần, {columnB}: {countB} lần";
                     Console.WriteLine(mismatch);
                     result.AmountMismatches.Add(mismatch);
                 }
@@ -64,20 +111,20 @@ namespace CsvCompareApp.Services
             var onlyInA = countsInA.Keys.Where(k => !countsInB.ContainsKey(k));
             var onlyInB = countsInB.Keys.Where(k => !countsInA.ContainsKey(k));
 
-            Console.WriteLine($"\n3️⃣ Chỉ có trong {columnA}:");
+            Console.WriteLine($"\nChỉ có trong {columnA}:");
             foreach (var a in onlyInA)
             {
-                string onlyA = $"   ➡️ {a} ({countsInA[a]} lần)";
+                string onlyA = $"   {a} ({countsInA[a]} lần)";
                 Console.WriteLine(onlyA);
                 result.OnlyInFirst.Add(onlyA);
             }
             
             if (!onlyInA.Any())
             {
-                Console.WriteLine($"   ✅ Không có giá trị nào chỉ có trong {columnA}.");
+                Console.WriteLine($"   Không có giá trị nào chỉ có trong {columnA}.");
             }
 
-            Console.WriteLine($"\n4️⃣ Chỉ có trong {columnB}:");
+            Console.WriteLine($"\nChỉ có trong {columnB}:");
             foreach (var b in onlyInB)
             {
                 string onlyB = $"   {b} ({countsInB[b]} lần)";
@@ -97,115 +144,15 @@ namespace CsvCompareApp.Services
             return result;
         }
 
-        public ComparisonResult CompareGroupColumns(List<Dictionary<string, object>> records, 
-            GroupColumnConfiguration groupA, GroupColumnConfiguration groupB)
-        {
-            var result = new ComparisonResult();
-            
-            Console.WriteLine($"=== 🔍 ĐỐI CHIẾU DỮ LIỆU: {groupA.GroupName} ↔ {groupB.GroupName} ===\n");
-
-            // Create dictionaries for each group
-            var dictA = CreateGroupDictionary(records, groupA.IdColumn, groupA.AmountColumn);
-            var dictB = CreateGroupDictionary(records, groupB.IdColumn, groupB.AmountColumn);
-
-            result.TotalFirstGroup = dictA.Count;
-            result.TotalSecondGroup = dictB.Count;
-
-            Console.WriteLine($"📊 Đã tải: {dictA.Count} dòng từ {groupA.GroupName}, {dictB.Count} dòng từ {groupB.GroupName}\n");
-
-            // 1. So sánh ID khớp nhưng Amount khác
-            Console.WriteLine($"1️⃣ 💰 CÁC ID KHỚP NHƯNG SỐ TIỀN KHÁC NHAU:");
-            foreach (var kvp in dictA)
-            {
-                long id = kvp.Key;
-                decimal amountA = kvp.Value;
-                
-                if (dictB.ContainsKey(id))
-                {
-                    decimal amountB = dictB[id];
-                    if (amountA != amountB)
-                    {
-                        var difference = amountA - amountB;
-                        string sign = difference > 0 ? "+" : "";
-                        string mismatch = $"   🆔 ID: {id:D6} | {groupA.GroupName}: {amountA:N0}đ | {groupB.GroupName}: {amountB:N0}đ | 📈 Chênh: {sign}{difference:N0}đ";
-                        Console.WriteLine(mismatch);
-                        result.AmountMismatches.Add(mismatch);
-                    }
-                }
-            }
-            
-            if (result.AmountMismatches.Count == 0)
-            {
-                Console.WriteLine("   ✅ Tuyệt vời! Không có ID nào lệch số tiền.");
-            }
-
-            // 2. ID chỉ có ở nhóm A
-            Console.WriteLine($"\n2️⃣ ➡️ CÁC ID CHỈ CÓ TRONG {groupA.GroupName}:");
-            var onlyInA = dictA.Keys.Where(id => !dictB.ContainsKey(id)).ToList();
-            foreach (var id in onlyInA)
-            {
-                string onlyA = $"   🔹 ID: {id:D6} | Số tiền: {dictA[id]:N0}đ";
-                Console.WriteLine(onlyA);
-                result.OnlyInFirst.Add(onlyA);
-            }
-            
-            if (onlyInA.Count == 0)
-            {
-                Console.WriteLine($"   ✅ Không có ID nào chỉ có trong {groupA.GroupName}.");
-            }
-
-            // 3. ID chỉ có ở nhóm B
-            Console.WriteLine($"\n3️⃣ ⬅️ CÁC ID CHỈ CÓ TRONG {groupB.GroupName}:");
-            var onlyInB = dictB.Keys.Where(id => !dictA.ContainsKey(id)).ToList();
-            foreach (var id in onlyInB)
-            {
-                string onlyB = $"   🔸 ID: {id:D6} | Số tiền: {dictB[id]:N0}đ";
-                Console.WriteLine(onlyB);
-                result.OnlyInSecond.Add(onlyB);
-            }
-            
-            if (onlyInB.Count == 0)
-            {
-                Console.WriteLine($"   ✅ Không có ID nào chỉ có trong {groupB.GroupName}.");
-            }
-
-            // Tính số khớp hoàn toàn
-            result.PerfectMatches = dictA.Keys.Count(id => dictB.ContainsKey(id) && dictA[id] == dictB[id]);
-
-            // Tổng kết với emoji và định dạng đẹp hơn
-            Console.WriteLine($"\n" + new string('=', 55));
-            Console.WriteLine($"📋 TỔNG KẾT ĐỐI CHIẾU");
-            Console.WriteLine($"" + new string('=', 55));
-            Console.WriteLine($"📊 Tổng ID trong {groupA.GroupName}: {result.TotalFirstGroup:N0}");
-            Console.WriteLine($"📊 Tổng ID trong {groupB.GroupName}: {result.TotalSecondGroup:N0}");
-            Console.WriteLine($"✅ ID khớp hoàn toàn: {result.PerfectMatches:N0}");
-            Console.WriteLine($"💰 ID lệch số tiền: {result.AmountMismatches.Count:N0}");
-            Console.WriteLine($"➡️ ID chỉ có trong {groupA.GroupName}: {result.OnlyInFirst.Count:N0}");
-            Console.WriteLine($"⬅️ ID chỉ có trong {groupB.GroupName}: {result.OnlyInSecond.Count:N0}");
-            
-            if (result.AmountMismatches.Count == 0 && result.OnlyInFirst.Count == 0 && result.OnlyInSecond.Count == 0)
-            {
-                Console.WriteLine($"\n🎉 HOÀN HẢO! Tất cả dữ liệu đều khớp nhau!");
-            }
-            else
-            {
-                var totalIssues = result.AmountMismatches.Count + result.OnlyInFirst.Count + result.OnlyInSecond.Count;
-                Console.WriteLine($"\n⚠️ Phát hiện {totalIssues:N0} điểm khác biệt cần kiểm tra");
-            }
-            Console.WriteLine("" + new string('=', 55) + "\n");
-
-            return result;
-        }
-
         private Dictionary<long, decimal> CreateGroupDictionary(List<Dictionary<string, object>> records, 
-            string idColumn, string amountColumn)
+            string idColumnName, string amountColumnName)
         {
             var dictionary = new Dictionary<long, decimal>();
             
             foreach (var record in records)
             {
-                var idValue = record.GetValueOrDefault(idColumn, "").ToString();
-                var amountValue = record.GetValueOrDefault(amountColumn, "0").ToString();
+                var idValue = record.GetValueOrDefault(idColumnName, "").ToString();
+                var amountValue = record.GetValueOrDefault(amountColumnName, "0").ToString();
                 
                 if (!string.IsNullOrEmpty(idValue) && TryParseId(idValue, out long id))
                 {
@@ -242,30 +189,54 @@ namespace CsvCompareApp.Services
             return false;
         }
 
-        public void PrintSummary(ComparisonResult result, ComparisonType comparisonType)
+        public void PrintGroupSummary(GroupComparisonResult result)
         {
-            Console.WriteLine("\n=== TÓM TẮT ===");
-            
-            if (comparisonType == ComparisonType.TwoColumns)
+            Console.WriteLine("\n--- KẾT QUẢ SO SÁNH NHÓM ---");
+            Console.WriteLine($"\n--- TỔNG QUAN ---");
+            Console.WriteLine($"- {result.TotalInGroupA} mục trong Nhóm A");
+            Console.WriteLine($"- {result.TotalInGroupB} mục trong Nhóm B");
+            Console.WriteLine($"- {result.Matches.Count} mục trùng khớp hoàn toàn");
+            Console.WriteLine($"- {result.OnlyInA.Count} mục chỉ có trong Nhóm A");
+            Console.WriteLine($"- {result.OnlyInB.Count} mục chỉ có trong Nhóm B");
+            Console.WriteLine($"- {result.Mismatches.Count} mục có mã giống nhau nhưng số tiền khác nhau");
+
+            if (result.Matches.Any())
             {
-                Console.WriteLine($"Tổng số giá trị cột 1: {result.TotalFirstGroup}");
-                Console.WriteLine($"Tổng số giá trị cột 2: {result.TotalSecondGroup}");
-                Console.WriteLine($"Số dòng khác nhau: {result.Differences.Count}");
-                Console.WriteLine($"Giá trị chỉ có ở cột 1: {result.OnlyInFirst.Count}");
-                Console.WriteLine($"Giá trị chỉ có ở cột 2: {result.OnlyInSecond.Count}");
-                Console.WriteLine($"Giá trị có số lần xuất hiện khác nhau: {result.AmountMismatches.Count}");
+                Console.WriteLine("\n--- MỤC TRÙNG KHỚP HOÀN TOÀN ---");
+                foreach (var match in result.Matches)
+                {
+                    Console.WriteLine($"ID: {match.Id}, Tiền: {match.Amount:N0}");
+                }
             }
-            else
+
+            if (result.OnlyInA.Any())
             {
-                Console.WriteLine($"Tổng số ID nhóm 1: {result.TotalFirstGroup}");
-                Console.WriteLine($"Tổng số ID nhóm 2: {result.TotalSecondGroup}");
-                Console.WriteLine($"ID khớp nhưng lệch Amount: {result.AmountMismatches.Count}");
-                Console.WriteLine($"ID chỉ có ở nhóm 1: {result.OnlyInFirst.Count}");
-                Console.WriteLine($"ID chỉ có ở nhóm 2: {result.OnlyInSecond.Count}");
-                Console.WriteLine($"ID khớp hoàn toàn (ID và Amount): {result.PerfectMatches}");
+                Console.WriteLine("\n--- CHỈ CÓ TRONG NHÓM A ---");
+                foreach (var item in result.OnlyInA)
+                {
+                    Console.WriteLine($"ID: {item.Id}, Tiền: {item.Amount:N0}");
+                }
+            }
+
+            if (result.OnlyInB.Any())
+            {
+                Console.WriteLine("\n--- CHỈ CÓ TRONG NHÓM B ---");
+                foreach (var item in result.OnlyInB)
+                {
+                    Console.WriteLine($"ID: {item.Id}, Tiền: {item.Amount:N0}");
+                }
+            }
+
+            if (result.Mismatches.Any())
+            {
+                Console.WriteLine("\n--- MÃ GIỐNG NHAU, SỐ TIỀN KHÁC NHAU ---");
+                foreach (var mismatch in result.Mismatches)
+                {
+                    Console.WriteLine($"ID: {mismatch.Id}, Tiền Nhóm A: {mismatch.AmountA:N0}, Tiền Nhóm B: {mismatch.AmountB:N0}");
+                }
             }
         }
-        
+
         // Helper method to find the index of a column in keys collection
         private int FindColumnIndex(IEnumerable<string> keys, string columnName)
         {

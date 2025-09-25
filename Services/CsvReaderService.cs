@@ -12,7 +12,19 @@ namespace CsvCompareApp.Services
         public List<Dictionary<string, object>> ReadCsvFile(ColumnConfiguration config)
         {
             // Kiểm tra extension của file để quyết định phương thức đọc
-            var extension = Path.GetExtension(config.FilePath).ToLowerInvariant();
+            var extens                        // Check nếu decode thành công và có ký tự tiếng Việt
+                        if (IsValidVietnameseText(decoded))
+                        {
+                            Console.WriteLine($"Successfully decoded with {encoding.EncodingName}");
+                            return encoding;
+                        }
+                        
+                        // Check nếu không có ký tự lỗi
+                        if (!decoded.Contains("") && !decoded.Contains("?"))
+                        {
+                            Console.WriteLine($"Clean decode with {encoding.EncodingName}");
+                            return encoding;
+                        }tExtension(config.FilePath).ToLowerInvariant();
             
             if (extension == ".xlsx" || extension == ".xls")
             {
@@ -28,25 +40,25 @@ namespace CsvCompareApp.Services
         {
             try
             {
-                Console.WriteLine($"📊 Đang đọc file Excel: {config.FilePath}");
+                Console.WriteLine($"Đang đọc file Excel: {config.FilePath}");
                 
                 using var workbook = new XLWorkbook(config.FilePath);
                 var worksheet = workbook.Worksheet(1); // Đọc sheet đầu tiên
                 
-                Console.WriteLine($"📋 Sheet: {worksheet.Name}");
+                Console.WriteLine($"Sheet: {worksheet.Name}");
                 
                 var records = new List<Dictionary<string, object>>();
                 var rows = worksheet.RowsUsed().ToList();
                 
                 if (rows.Count == 0)
                 {
-                    Console.WriteLine("⚠️ File Excel trống!");
+                    Console.WriteLine("File Excel trống!");
                     return records;
                 }
 
                 var firstRow = rows[0];
                 var totalColumns = firstRow.CellsUsed().Count();
-                Console.WriteLine($"📊 Phát hiện {totalColumns} cột trong file Excel");
+                Console.WriteLine($"Phát hiện {totalColumns} cột trong file Excel");
                 
                 int startRowIndex = config.HasHeaderRecord ? 1 : 0; // Bắt đầu từ dòng 1 nếu có header, ngược lại từ dòng 0
                 
@@ -57,7 +69,7 @@ namespace CsvCompareApp.Services
                     // Nếu config không đủ cột, tạo thêm cột
                     var additionalColumns = GenerateColumnNames(totalColumns);
                     columnNames = additionalColumns.Take(totalColumns).ToList();
-                    Console.WriteLine($"🔧 Đã tạo thêm tên cột: [{string.Join(", ", columnNames)}]");
+                    Console.WriteLine($"Đã tạo thêm tên cột: [{string.Join(", ", columnNames)}]");
                 }
                 
                 // Handle duplicate column names by using column indexes
@@ -94,12 +106,12 @@ namespace CsvCompareApp.Services
                     records.Add(record);
                 }
                 
-                Console.WriteLine($"✅ Đã đọc {records.Count} dòng từ file Excel");
+                Console.WriteLine($"Đã đọc {records.Count} dòng từ file Excel");
                 return records;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Lỗi khi đọc file Excel: {ex.Message}");
+                Console.WriteLine($"Lỗi khi đọc file Excel: {ex.Message}");
                 return new List<Dictionary<string, object>>();
             }
         }
@@ -110,7 +122,7 @@ namespace CsvCompareApp.Services
             {
                 // Sử dụng encoding được chỉ định hoặc auto-detect
                 var encoding = forcedEncoding ?? DetectFileEncoding(config.FilePath);
-                Console.WriteLine($"📄 Using encoding: {encoding.EncodingName}");
+                Console.WriteLine($"Using encoding: {encoding.EncodingName}");
                 
                 using var stream = new FileStream(config.FilePath, FileMode.Open, FileAccess.Read);
                 using var reader = new StreamReader(stream, encoding);
@@ -197,7 +209,7 @@ namespace CsvCompareApp.Services
         {
             try
             {
-                Console.WriteLine($"🔍 Đang phân tích file Excel: {filePath}");
+                Console.WriteLine($"Đang phân tích file Excel: {filePath}");
                 
                 using var workbook = new XLWorkbook(filePath);
                 var worksheet = workbook.Worksheet(1);
@@ -211,7 +223,7 @@ namespace CsvCompareApp.Services
                 var firstRow = rows[0];
                 var totalColumns = firstRow.CellsUsed().Count();
                 
-                Console.WriteLine($"📊 Phát hiện {totalColumns} cột trong Excel");
+                Console.WriteLine($"Phát hiện {totalColumns} cột trong Excel");
                 
                 // Đọc dòng đầu tiên
                 var firstRowValues = new List<string>();
@@ -225,7 +237,7 @@ namespace CsvCompareApp.Services
                 if (rows.Count < 2)
                 {
                     var columnNames = GenerateColumnNames(totalColumns);
-                    Console.WriteLine($"📊 Chỉ có 1 dòng, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
+                    Console.WriteLine($"Chỉ có 1 dòng, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
                     return (false, columnNames);
                 }
                 
@@ -243,19 +255,19 @@ namespace CsvCompareApp.Services
                 
                 if (hasHeader)
                 {
-                    Console.WriteLine($"✅ Phát hiện header trong Excel: [{string.Join(", ", firstRowValues)}]");
+                    Console.WriteLine($"Phát hiện header trong Excel: [{string.Join(", ", firstRowValues)}]");
                     return (true, firstRowValues);
                 }
                 else
                 {
                     var columnNames = GenerateColumnNames(totalColumns);
-                    Console.WriteLine($"📊 Không có header, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
+                    Console.WriteLine($"Không có header, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
                     return (false, columnNames);
                 }
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"❌ Lỗi khi phân tích file Excel: {ex.Message}");
+                Console.WriteLine($"Lỗi khi phân tích file Excel: {ex.Message}");
                 return (false, new List<string>());
             }
         }
@@ -309,13 +321,13 @@ namespace CsvCompareApp.Services
                 if (hasHeader)
                 {
                     var uniqueHeaders = GetUniqueHeaders(firstRow);
-                    Console.WriteLine($"✅ Phát hiện header: [{string.Join(", ", uniqueHeaders)}]");
+                    Console.WriteLine($"Phát hiện header: [{string.Join(", ", uniqueHeaders)}]");
                     return (true, uniqueHeaders);
                 }
                 else
                 {
                     var columnNames = GenerateColumnNames(firstRow.Count);
-                    Console.WriteLine($"📊 Không có header, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
+                    Console.WriteLine($"Không có header, tạo tên cột tự động: [{string.Join(", ", columnNames)}]");
                     return (false, columnNames);
                 }
             }
@@ -395,19 +407,19 @@ namespace CsvCompareApp.Services
                 // Check for BOM (Byte Order Mark)
                 if (buffer.Length >= 3 && buffer[0] == 0xEF && buffer[1] == 0xBB && buffer[2] == 0xBF)
                 {
-                    Console.WriteLine("🔍 Found UTF-8 BOM");
+                    Console.WriteLine("Found UTF-8 BOM");
                     return Encoding.UTF8;
                 }
                 
                 if (buffer.Length >= 2 && buffer[0] == 0xFF && buffer[1] == 0xFE)
                 {
-                    Console.WriteLine("🔍 Found UTF-16 LE BOM");
+                    Console.WriteLine("Found UTF-16 LE BOM");
                     return Encoding.Unicode;
                 }
                 
                 if (buffer.Length >= 2 && buffer[0] == 0xFE && buffer[1] == 0xFF)
                 {
-                    Console.WriteLine("🔍 Found UTF-16 BE BOM");
+                    Console.WriteLine("Found UTF-16 BE BOM");
                     return Encoding.BigEndianUnicode;
                 }
                 
@@ -448,12 +460,12 @@ namespace CsvCompareApp.Services
                 }
                 
                 // Default fallback
-                Console.WriteLine("🔍 Using UTF-8 as fallback");
+                Console.WriteLine("Using UTF-8 as fallback");
                 return Encoding.UTF8;
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"⚠️ Error detecting encoding: {ex.Message}. Using UTF-8.");
+                Console.WriteLine($"Error detecting encoding: {ex.Message}. Using UTF-8.");
                 return Encoding.UTF8;
             }
         }

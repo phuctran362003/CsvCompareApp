@@ -22,7 +22,7 @@ namespace CsvCompareApp.Services
             
             while (attempts < maxAttempts)
             {
-                Console.Write("Nhập đường dẫn đến file CSV (hoặc 'exit' để thoát): ");
+                            Console.Write("Nhập đường dẫn file: ");
                 string? filePath = Console.ReadLine();
                 
                 if (string.IsNullOrEmpty(filePath))
@@ -145,45 +145,6 @@ namespace CsvCompareApp.Services
             return _csvReaderService.AnalyzeCsvFile(filePath);
         }
 
-        public (string, string) SelectTwoColumns(List<string> availableColumns)
-        {
-            if (availableColumns.Any())
-            {
-                Console.WriteLine("\nCác cột có sẵn:");
-                for (int i = 0; i < availableColumns.Count; i++)
-                {
-                    Console.WriteLine($"{i + 1}. {availableColumns[i]}");
-                }
-                
-                string column1 = SelectColumn(availableColumns, "Chọn cột thứ nhất");
-                string column2 = SelectColumn(availableColumns, "Chọn cột thứ hai");
-                
-                return (column1, column2);
-            }
-            else
-            {
-                Console.Write("Nhập tên cột thứ nhất: ");
-                string? col1 = Console.ReadLine();
-                Console.Write("Nhập tên cột thứ hai: ");
-                string? col2 = Console.ReadLine();
-                
-                return (col1 ?? "Column_1", col2 ?? "Column_2");
-            }
-        }
-
-        public (GroupColumnConfiguration, GroupColumnConfiguration) SelectGroupColumns(List<string> availableColumns)
-        {
-            Console.WriteLine("\n=== CẤU HÌNH BÊN A (Nguồn 1) ===");
-            Console.WriteLine("💼 Chọn cột ID và số tiền của bên A");
-            var group1 = ConfigureGroup(availableColumns, "Bên A");
-            
-            Console.WriteLine("\n=== CẤU HÌNH BÊN B (Nguồn 2) ===");
-            Console.WriteLine("💼 Chọn cột ID và số tiền của bên B");
-            var group2 = ConfigureGroup(availableColumns, "Bên B");
-            
-            return (group1, group2);
-        }
-
         private GroupColumnConfiguration ConfigureGroup(List<string> availableColumns, string groupName)
         {
             var config = new GroupColumnConfiguration { GroupName = groupName };
@@ -253,40 +214,28 @@ namespace CsvCompareApp.Services
             return availableColumns[0];
         }
 
-        public bool AskToContinue()
+        public void ShowComparisonResult(ComparisonResult result)
         {
-            Console.WriteLine("\nBạn có muốn thực hiện so sánh khác không?");
-            Console.WriteLine("1. Có");
-            Console.WriteLine("2. Không");
+            Console.WriteLine("\n=== KẾT QUẢ SO SÁNH ===");
+            Console.WriteLine($"Tổng số dòng: {result.TotalRows}");
+            Console.WriteLine($"Số dòng giống nhau: {result.MatchingRows}");
+            Console.WriteLine($"Số dòng khác nhau: {result.MismatchingRows}");
             
-            int attempts = 0;
-            const int maxAttempts = 3;
-            
-            while (attempts < maxAttempts)
+            if (result.Mismatches.Any())
             {
-                Console.Write("Nhập lựa chọn (1 hoặc 2): ");
-                string? input = Console.ReadLine();
-                
-                if (string.IsNullOrEmpty(input))
+                Console.WriteLine("\n--- MÃ GIỐNG NHAU, SỐ TIỀN KHÁC NHAU ---");
+                foreach (var mismatch in result.Mismatches)
                 {
-                    attempts++;
-                    Console.WriteLine("Input trống! Vui lòng nhập 1 hoặc 2.");
-                    continue;
-                }
-                
-                if (input.Trim() == "1")
-                    return true;
-                else if (input.Trim() == "2")
-                    return false;
-                else
-                {
-                    attempts++;
-                    Console.WriteLine($"Input không hợp lệ: '{input}'. Vui lòng nhập 1 hoặc 2!");
+                    Console.WriteLine($"ID: {mismatch.Id}, Tiền Nhóm A: {mismatch.AmountA:N0}, Tiền Nhóm B: {mismatch.AmountB:N0}");
                 }
             }
-            
-            Console.WriteLine($"Quá nhiều lần nhập sai ({maxAttempts} lần). Thoát chương trình.");
-            return false;
+        }
+
+        public bool AskToContinue()
+        {
+            Console.Write("\nBạn có muốn thực hiện so sánh khác không? (y/n): ");
+            var input = Console.ReadLine();
+            return input?.ToLower() == "y";
         }
     }
 }

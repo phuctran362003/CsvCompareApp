@@ -12,7 +12,7 @@ namespace CsvCompareApp
             Console.OutputEncoding = Encoding.UTF8;
             Console.InputEncoding = Encoding.UTF8;
             
-            Console.WriteLine("🚀 Bắt đầu chương trình so sánh CSV...\n");
+            Console.WriteLine("Bắt đầu chương trình so sánh CSV...\n");
             
             var csvReaderService = new CsvReaderService();
             var comparisonService = new ComparisonService();
@@ -28,12 +28,12 @@ namespace CsvCompareApp
                         string filePath = userInterfaceService.GetFilePath();
 
                         // 2. Tự động phân tích file CSV
-                        Console.WriteLine("\n🔍 Đang phân tích file CSV...");
+                        Console.WriteLine("\nĐang phân tích file...");
                         var (hasHeader, availableColumns) = userInterfaceService.AnalyzeCsvFile(filePath);
 
                         if (availableColumns.Any())
                         {
-                            Console.WriteLine("\n📋 Các cột phát hiện trong file:");
+                            Console.WriteLine("\nCác cột phát hiện trong file:");
                             for (int i = 0; i < availableColumns.Count; i++)
                             {
                                 Console.WriteLine($"  {i + 1}. {availableColumns[i]}");
@@ -49,39 +49,34 @@ namespace CsvCompareApp
 
                         if (comparisonType == ComparisonType.TwoColumns)
                         {
-                            var (column1, column2) = userInterfaceService.SelectTwoColumns(availableColumns);
+                            var (column1, column2) = userInterfaceService.ConfigureTwoColumns(availableColumns);
                             
                             columnConfig = new ColumnConfiguration
                             {
                                 FilePath = filePath,
                                 HasHeaderRecord = hasHeader,
-                                ColumnNames = new List<string> { column1, column2 }
+                                ColumnNames = availableColumns
                             };
 
                             var records = csvReaderService.ReadCsvFile(columnConfig);
-                            result = comparisonService.CompareTwoColumns(records, column1, column2);
+                            var result = comparisonService.CompareTwoColumns(records, column1, column2);
+                            userInterfaceService.DisplayTwoColumnResult(result);
                         }
-                        else
+                        else // TwoGroups
                         {
-                            var (groupA, groupB) = userInterfaceService.SelectGroupColumns(availableColumns);
+                            var groupConfig = userInterfaceService.ConfigureGroup(filePath, availableColumns);
                             
                             columnConfig = new ColumnConfiguration
                             {
                                 FilePath = filePath,
                                 HasHeaderRecord = hasHeader,
-                                ColumnNames = new List<string> 
-                                { 
-                                    groupA.IdColumn, groupA.AmountColumn,
-                                    groupB.IdColumn, groupB.AmountColumn 
-                                }
+                                ColumnNames = availableColumns
                             };
 
                             var records = csvReaderService.ReadCsvFile(columnConfig);
-                            result = comparisonService.CompareGroupColumns(records, groupA, groupB);
+                            var result = comparisonService.CompareGroupColumns(records, groupConfig);
+                            comparisonService.PrintGroupSummary(result);
                         }
-
-                        // 6. In tóm tắt
-                        comparisonService.PrintSummary(result, comparisonType);
                     }
                     catch (Exception loopEx)
                     {
@@ -94,13 +89,12 @@ namespace CsvCompareApp
 
                 } while (userInterfaceService.AskToContinue());
 
-                Console.WriteLine("\nCảm ơn bạn đã sử dụng CSV Comparison Tool!");
+                Console.WriteLine("\nCảm ơn bạn đã sử dụng công cụ so sánh!");
             }
             catch (Exception ex)
             {
-                Console.WriteLine($"Đã xảy ra lỗi: {ex.Message}");
-                Console.WriteLine("Nhấn Enter để thoát...");
-                Console.ReadLine();
+                Console.WriteLine($"\nLỗi nghiêm trọng: {ex.Message}");
+                Console.WriteLine("Chương trình sẽ thoát.");
             }
         }
     }
